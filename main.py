@@ -2,8 +2,10 @@ import argparse
 import logging
 import secrets
 import os
+import sys
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidTag
@@ -30,26 +32,33 @@ def fuzz_hash(input_string, algorithm="SHA256"):
     """Fuzzes a hashing operation."""
     if not input_string:
         logging.error("Input string cannot be empty for hashing.")
-        return
+        return False
 
     try:
         if algorithm == "SHA256":
-            hasher = hashes.SHA256()
+            hasher = hashes.Hash(hashes.SHA256())
         elif algorithm == "SHA512":
-            hasher = hashes.SHA512()
+            hasher = hashes.Hash(hashes.SHA512())
         else:
             logging.error(f"Unsupported hashing algorithm: {algorithm}")
-            return
+            return False
 
+        # hashes.SHA256() on its own is only an algorithm description; it
+        # has no update or finalize. Wrapping it in hashes.Hash is what
+        # makes a context, and without that this operation errored on
+        # every input and the error was only visible in the log.
         hasher.update(input_string.encode('utf-8'))
         digest = hasher.finalize()
         logging.info(f"Hashed input: {input_string} using {algorithm}")
         logging.info(f"Digest: {digest.hex()}")
 
-        #Fuzzing by slightly changing the input
+        # Fuzzing by slightly changing the input. The fresh hasher has to
+        # be the algorithm the caller picked: this loop used to rebuild a
+        # SHA256 hasher unconditionally, so a SHA512 run compared a SHA512
+        # digest against SHA256 digests of the fuzzed inputs.
         for i in range(5): #Try 5 different fuzzes
             fuzzed_input = input_string + chr(ord('a') + i)
-            hasher = hashes.SHA256() #reinitialize to ensure clean slate
+            hasher = hashes.Hash(hashes.SHA512()) if algorithm == "SHA512" else hashes.Hash(hashes.SHA256())
             hasher.update(fuzzed_input.encode('utf-8'))
             fuzzed_digest = hasher.finalize()
             logging.info(f"Fuzzed input: {fuzzed_input}")
@@ -58,12 +67,15 @@ def fuzz_hash(input_string, algorithm="SHA256"):
 
     except Exception as e:
         logging.error(f"Error during hashing: {e}")
+        return False
+    return True
+
 
 def fuzz_kdf(password, salt, iterations=10000):
     """Fuzzes a Key Derivation Function (KDF)."""
     if not password or not salt:
         logging.error("Password and salt cannot be empty for KDF.")
-        return
+        return False
 
     try:
         password_bytes = password.encode('utf-8')
@@ -98,20 +110,40 @@ def fuzz_kdf(password, salt, iterations=10000):
 
     except Exception as e:
         logging.error(f"Error during KDF: {e}")
+    return True
+
 
 def fuzz_encrypt(plaintext, key, iv, cipher_algorithm="AES", cipher_mode="CBC"):
     """Fuzzes encryption operation."""
     if not plaintext or not key or not iv:
         logging.error("Plaintext, key, and IV cannot be empty for encryption.")
-        return
+        return False
 
     try:
         key_bytes = key.encode('utf-8')[:32] #truncate if longer than 32
         iv_bytes = iv.encode('utf-8')[:16]  #truncate if longer than 16
         plaintext_bytes = plaintext.encode('utf-8')
 
+        if cipher_algorithm == "AES" and len(key_bytes) not in (16, 24, 32):
+            # Truncation can shorten a long key, but it cannot lengthen a
+            # short one, and Cipher then fails with a size message that
+            # does not say the key was the problem. Name it here.
+            logging.error(f"AES key must be 16, 24 or 32 bytes after encoding, got {len(key_bytes)}.")
+            return False
+
+        if cipher_mode == "CBC":
+            # CBC encrypts whole blocks only, so any plaintext whose length
+            # is not a block multiple failed outright, including the
+            # example in this file's own footer. PKCS7 pad it; the decrypt
+            # side removes the padding again when it is present.
+            block_bits = 128 if cipher_algorithm == "AES" else 64
+            padder = padding.PKCS7(block_bits).padder()
+            plaintext_bytes = padder.update(plaintext_bytes) + padder.finalize()
+
         if cipher_algorithm == "AES":
-            if cipher_mode == "CBC":
+            if cipher_mode == "GCM":
+                cipher = Cipher(algorithms.AES(key_bytes), modes.GCM(iv_bytes), backend=default_backend())
+            elif cipher_mode == "CBC":
                 cipher = Cipher(algorithms.AES(key_bytes), modes.CBC(iv_bytes), backend=default_backend())
             elif cipher_mode == "CFB":
                  cipher = Cipher(algorithms.AES(key_bytes), modes.CFB(iv_bytes), backend=default_backend())
@@ -119,7 +151,7 @@ def fuzz_encrypt(plaintext, key, iv, cipher_algorithm="AES", cipher_mode="CBC"):
                 cipher = Cipher(algorithms.AES(key_bytes), modes.CTR(iv_bytes), backend=default_backend())
             else:
                 logging.error(f"Unsupported cipher mode: {cipher_mode}")
-                return
+                return False
         elif cipher_algorithm == "Blowfish":
             if cipher_mode == "CBC":
                 cipher = Cipher(algorithms.Blowfish(key_bytes[:16]), modes.CBC(iv_bytes[:8]), backend=default_backend()) #blowfish key size is smaller
@@ -129,20 +161,27 @@ def fuzz_encrypt(plaintext, key, iv, cipher_algorithm="AES", cipher_mode="CBC"):
                 cipher = Cipher(algorithms.Blowfish(key_bytes[:16]), modes.CTR(iv_bytes[:8]), backend=default_backend())
             else:
                 logging.error(f"Unsupported cipher mode: {cipher_mode}")
-                return
+                return False
         else:
             logging.error(f"Unsupported cipher algorithm: {cipher_algorithm}")
-            return
+            return False
 
         encryptor = cipher.encryptor()
         ciphertext = encryptor.update(plaintext_bytes) + encryptor.finalize()
         logging.info(f"Encrypted plaintext: {plaintext} using {cipher_algorithm} with {cipher_mode}")
         logging.info(f"Ciphertext: {ciphertext.hex()}")
+        if cipher_mode == "GCM":
+            # GCM produced no branch here at all before, so the mode the
+            # footer example promises for encryption was refused as
+            # unsupported. The tag only exists after finalize().
+            logging.info(f"GCM Tag: {encryptor.tag.hex()}")
 
         # Fuzzing the IV
         fuzzed_iv = os.urandom(len(iv_bytes)) #Random IV of same length
         if cipher_algorithm == "AES":
-            if cipher_mode == "CBC":
+            if cipher_mode == "GCM":
+                cipher = Cipher(algorithms.AES(key_bytes), modes.GCM(fuzzed_iv), backend=default_backend())
+            elif cipher_mode == "CBC":
                 cipher = Cipher(algorithms.AES(key_bytes), modes.CBC(fuzzed_iv), backend=default_backend())
             elif cipher_mode == "CFB":
                  cipher = Cipher(algorithms.AES(key_bytes), modes.CFB(fuzzed_iv), backend=default_backend())
@@ -166,16 +205,21 @@ def fuzz_encrypt(plaintext, key, iv, cipher_algorithm="AES", cipher_mode="CBC"):
 
     except Exception as e:
         logging.error(f"Error during encryption: {e}")
+    return True
+
 
 def fuzz_decrypt(ciphertext, key, iv, cipher_algorithm="AES", cipher_mode="CBC", tag=None):
     """Fuzzes decryption operation."""
     if not ciphertext or not key or not iv:
         logging.error("Ciphertext, key, and IV cannot be empty for decryption.")
-        return
+        return False
 
     try:
         key_bytes = key.encode('utf-8')[:32] #truncate if longer than 32
         iv_bytes = iv.encode('utf-8')[:16]  #truncate if longer than 16
+        if cipher_algorithm == "AES" and len(key_bytes) not in (16, 24, 32):
+            logging.error(f"AES key must be 16, 24 or 32 bytes after encoding, got {len(key_bytes)}.")
+            return False
         ciphertext_bytes = bytes.fromhex(ciphertext)
 
         if cipher_algorithm == "AES":
@@ -188,13 +232,13 @@ def fuzz_decrypt(ciphertext, key, iv, cipher_algorithm="AES", cipher_mode="CBC",
             elif cipher_mode == "GCM":
                 if tag is None:
                     logging.error("Tag must be provided for GCM mode")
-                    return
+                    return False
                 tag_bytes = bytes.fromhex(tag)
                 cipher = Cipher(algorithms.AES(key_bytes), modes.GCM(iv_bytes, tag_bytes), backend=default_backend())
 
             else:
                 logging.error(f"Unsupported cipher mode: {cipher_mode}")
-                return
+                return False
         elif cipher_algorithm == "Blowfish":
             if cipher_mode == "CBC":
                 cipher = Cipher(algorithms.Blowfish(key_bytes[:16]), modes.CBC(iv_bytes[:8]), backend=default_backend()) #blowfish key size is smaller
@@ -205,15 +249,25 @@ def fuzz_decrypt(ciphertext, key, iv, cipher_algorithm="AES", cipher_mode="CBC",
 
             else:
                 logging.error(f"Unsupported cipher mode: {cipher_mode}")
-                return
+                return False
 
         else:
             logging.error(f"Unsupported cipher algorithm: {cipher_algorithm}")
-            return
+            return False
 
         decryptor = cipher.decryptor()
         try:
             plaintext = decryptor.update(ciphertext_bytes) + decryptor.finalize()
+            if cipher_mode == "CBC":
+                # Output of this tool's own encrypt carries PKCS7 padding.
+                # Foreign or fuzzed ciphertext may not, so a failed unpad
+                # keeps the raw bytes instead of discarding the result.
+                try:
+                    block_bits = 128 if cipher_algorithm == "AES" else 64
+                    unpadder = padding.PKCS7(block_bits).unpadder()
+                    plaintext = unpadder.update(plaintext) + unpadder.finalize()
+                except ValueError:
+                    pass
             logging.info(f"Decrypted ciphertext: {ciphertext} using {cipher_algorithm} with {cipher_mode}")
             logging.info(f"Plaintext: {plaintext.decode('utf-8')}")
         except InvalidTag:
@@ -235,6 +289,7 @@ def fuzz_decrypt(ciphertext, key, iv, cipher_algorithm="AES", cipher_mode="CBC",
 
     except Exception as e:
         logging.error(f"Error during decryption: {e}")
+    return True
 
 
 def main():
@@ -242,15 +297,21 @@ def main():
     args = setup_argparse()
 
     if args.operation == "hash":
-        fuzz_hash(args.input, args.algorithm)
+        ok = fuzz_hash(args.input, args.algorithm)
     elif args.operation == "kdf":
-        fuzz_kdf(args.input, args.salt, args.iterations)
+        ok = fuzz_kdf(args.input, args.salt, args.iterations)
     elif args.operation == "encrypt":
-        fuzz_encrypt(args.input, args.key, args.iv, args.cipher, args.mode)
+        ok = fuzz_encrypt(args.input, args.key, args.iv, args.cipher, args.mode)
     elif args.operation == "decrypt":
-        fuzz_decrypt(args.input, args.key, args.iv, args.cipher, args.mode, args.tag)
+        ok = fuzz_decrypt(args.input, args.key, args.iv, args.cipher, args.mode, args.tag)
     else:
         logging.error("Invalid operation specified.")
+        ok = False
+
+    if not ok:
+        # Every operation used to end at exit 0 whether it ran or refused
+        # its inputs, so callers had to parse the log to spot a refusal.
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
