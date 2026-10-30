@@ -1,3 +1,5 @@
+![Banner](banner.png)
+
 # crypto-fuzzer
 A targeted fuzzer specifically designed to test cryptographic libraries and implementations by generating semi-valid and malformed inputs to uncover edge cases and potential vulnerabilities. - Focused on Basic cryptographic operations
 
