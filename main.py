@@ -89,7 +89,7 @@ def fuzz_kdf(password, salt, iterations=10000):
             backend=default_backend()
         )
         key = kdf.derive(password_bytes)
-        logging.info(f"Derived key using PBKDF2HMAC with password: {password}, salt: {salt}, iterations: {iterations}")
+        logging.info(f"Derived key using PBKDF2HMAC with salt: {salt}, iterations: {iterations}")
         logging.info(f"Derived Key: {key.hex()}")
 
         # Fuzzing iterations
@@ -110,6 +110,7 @@ def fuzz_kdf(password, salt, iterations=10000):
 
     except Exception as e:
         logging.error(f"Error during KDF: {e}")
+        return False
     return True
 
 
@@ -205,6 +206,7 @@ def fuzz_encrypt(plaintext, key, iv, cipher_algorithm="AES", cipher_mode="CBC"):
 
     except Exception as e:
         logging.error(f"Error during encryption: {e}")
+        return False
     return True
 
 
@@ -289,6 +291,7 @@ def fuzz_decrypt(ciphertext, key, iv, cipher_algorithm="AES", cipher_mode="CBC",
 
     except Exception as e:
         logging.error(f"Error during decryption: {e}")
+        return False
     return True
 
 
