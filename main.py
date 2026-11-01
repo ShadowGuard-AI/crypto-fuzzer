@@ -57,6 +57,9 @@ def fuzz_hash(input_string, algorithm="SHA256"):
         # SHA256 hasher unconditionally, so a SHA512 run compared a SHA512
         # digest against SHA256 digests of the fuzzed inputs.
         for i in range(5): #Try 5 different fuzzes
+            # My idea of fuzzing here is five inputs, each the original
+            # plus one more letter from a to e. Nothing is removed,
+            # reordered, or randomised, so this explores length only.
             fuzzed_input = input_string + chr(ord('a') + i)
             hasher = hashes.Hash(hashes.SHA512()) if algorithm == "SHA512" else hashes.Hash(hashes.SHA256())
             hasher.update(fuzzed_input.encode('utf-8'))
@@ -121,6 +124,10 @@ def fuzz_encrypt(plaintext, key, iv, cipher_algorithm="AES", cipher_mode="CBC"):
         return False
 
     try:
+        # I cut the encoded key at 32 bytes without telling the
+        # caller. Two different long keys that share a 32 byte prefix
+        # are the same key to this tool, which matters when a fuzz
+        # run is compared against another implementation.
         key_bytes = key.encode('utf-8')[:32] #truncate if longer than 32
         iv_bytes = iv.encode('utf-8')[:16]  #truncate if longer than 16
         plaintext_bytes = plaintext.encode('utf-8')
@@ -272,6 +279,9 @@ def fuzz_decrypt(ciphertext, key, iv, cipher_algorithm="AES", cipher_mode="CBC",
                     pass
             logging.info(f"Decrypted ciphertext: {ciphertext} using {cipher_algorithm} with {cipher_mode}")
             logging.info(f"Plaintext: {plaintext.decode('utf-8')}")
+        # A bad tag is logged and the function still returns True at
+        # the end. For a fuzzer that is a finding worth keeping, but
+        # it does mean the exit code cannot tell it from a clean run.
         except InvalidTag:
              logging.error("Invalid Tag")
 
