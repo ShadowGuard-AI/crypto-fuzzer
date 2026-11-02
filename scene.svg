@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="Glasshouse scene in three bands">
+<rect width="1200" height="300" fill="#f6eed8"/>
+<rect x="0" y="0" width="1200" height="90" fill="#e8dfc2"/>
+<g stroke="#c9bc96" stroke-width="5"><line x1="150" y1="0" x2="150" y2="90"/><line x1="450" y1="0" x2="450" y2="90"/><line x1="750" y1="0" x2="750" y2="90"/><line x1="1050" y1="0" x2="1050" y2="90"/></g>
+<g fill="#ffffff"><circle cx="240" cy="14" r="3"><animate attributeName="cy" values="14; 52; 52" keyTimes="0;0.4;1" dur="16s" repeatCount="indefinite"/><animate attributeName="r" values="2; 4.5; 4.5" keyTimes="0;0.4;1" dur="16s" repeatCount="indefinite"/></circle><circle cx="660" cy="10" r="3"><animate attributeName="cy" values="10; 44; 44" keyTimes="0;0.5;1" dur="19s" repeatCount="indefinite"/><animate attributeName="r" values="2; 5; 5" keyTimes="0;0.5;1" dur="19s" repeatCount="indefinite"/></circle><circle cx="980" cy="18" r="3"><animate attributeName="cy" values="18; 58; 58" keyTimes="0;0.35;1" dur="14s" repeatCount="indefinite"/></circle></g>
+<rect x="0" y="90" width="1200" height="118" fill="#efe0b8"/>
+<rect x="0" y="168" width="1200" height="18" fill="#8c5834"/>
+<g fill="#e2a0b4"><ellipse cx="200" cy="150" rx="26" ry="14"/><ellipse cx="520" cy="150" rx="26" ry="14"/><ellipse cx="840" cy="150" rx="26" ry="14"/></g>
+<g><g transform="translate(330 168)"><rect x="-6" y="-58" width="34" height="46" rx="6" fill="#d8ae5c" stroke="#a85428" stroke-width="3"><animateTransform attributeName="transform" type="rotate" values="0 0 0; -38 0 0; -38 0 0; 0 0 0" keyTimes="0;0.18;0.4;0.55" dur="20s" repeatCount="indefinite"/></rect></g><g transform="translate(620 168)"><rect x="-6" y="-58" width="34" height="46" rx="6" fill="#d8ae5c" stroke="#a85428" stroke-width="3"><animateTransform attributeName="transform" type="rotate" values="0 0 0; 0 0 0; -38 0 0; -38 0 0; 0 0 0" keyTimes="0;0.4;0.55;0.75;0.9" dur="20s" repeatCount="indefinite"/></rect></g><g transform="translate(910 168)"><rect x="-6" y="-58" width="34" height="46" rx="6" fill="#d8ae5c" stroke="#a85428" stroke-width="3"><animateTransform attributeName="transform" type="rotate" values="0 0 0; 0 0 0; -38 0 0; -38 0 0" keyTimes="0;0.7;0.85;0.95;1" dur="20s" repeatCount="indefinite"/></rect></g></g>
+<ellipse cx="1040" cy="140" rx="130" ry="16" fill="#ffffff" opacity="0"><animate attributeName="opacity" values="0;0;0.5;0" keyTimes="0;0.6;0.75;0.95" dur="20s" repeatCount="indefinite"/></ellipse>
+<rect x="0" y="208" width="1200" height="92" fill="#e6d3a0"/>
+<rect x="0" y="208" width="1200" height="92" fill="#ffd98a" opacity="0.12"><animate attributeName="opacity" values="0.05;0.3;0.05" dur="20s" repeatCount="indefinite"/></rect>
+<g fill="#4a7a36"><ellipse cx="260" cy="252" rx="52" ry="13"/><ellipse cx="600" cy="262" rx="60" ry="14"/><ellipse cx="940" cy="252" rx="52" ry="13"/></g>
+</svg>
